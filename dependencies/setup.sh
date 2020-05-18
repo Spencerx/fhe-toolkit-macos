@@ -15,8 +15,8 @@ TVSIMULATOR=appletvsimulator
 MACOS=macosx
 LOGICALCPU_MAX=`sysctl -n hw.logicalcpu_max`
 GMP_DIR="`pwd`/gmp"
-NTL_VERSION="11.4.1"
-GMP_VERSION="6.1.2"
+NTL_VERSION="11.4.3"
+GMP_VERSION="6.2.0"
 
 change_submodules() 
 {
