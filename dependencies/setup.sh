@@ -1,20 +1,39 @@
 #!/bin/sh
 set -x
-echo " — — — — — — — — — — Building Dependencies Script Started — — — — — — — — — — "
+trap read debug
 
-MIN_IOS="10.0"
-MIN_WATCHOS="2.0"
-MIN_TVOS=$MIN_IOS
+echo " — — — — — — — — — — Building Dependencies Script Started — — — — — — — — — — "
+THIS_PATH="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+
 MIN_MACOS="10.10"
+MIN_IOS="10.0"
+MIN_TVOS=$MIN_IOS
+MIN_WATCHOS="2.0"
+
 IPHONEOS=iphoneos
 IPHONESIMULATOR=iphonesimulator
 WATCHOS=watchos
 WATCHSIMULATOR=watchsimulator
 TVOS=appletvos
 TVSIMULATOR=appletvsimulator
-MACOS=macosx
+PLATFORM=macosx
+ARCH="x86_64"
 LOGICALCPU_MAX=`sysctl -n hw.logicalcpu_max`
-GMP_DIR="`pwd`/gmp"
+
+SDK=`xcrun --sdk $PLATFORM --show-sdk-path`
+PLATFORM_PATH=`xcrun --sdk $PLATFORM --show-sdk-platform-path`
+CLANG=`xcrun --sdk $PLATFORM --find clang`
+CMAKE_C_COMPILER="${CLANG}"
+CLANGXX=`xcrun --sdk $PLATFORM --find clang++`
+CMAKE_CXX_COMPILER="${CLANGXX}"
+CURRENT_DIR=`pwd`
+DEVELOPER=`xcode-select --print-path`
+
+CMAKE_PATH=$(dirname `which cmake`)
+
+export PATH="${CMAKE_PATH}:${PLATFORM_PATH}/Developer/usr/bin:${DEVELOPER}/usr/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+# Dependencies - GMP and NTL versions
 NTL_VERSION="11.4.3"
 GMP_VERSION="6.2.0"
 
@@ -65,6 +84,7 @@ version_min_flag()
     fi
     echo $FLAG
 }
+
 prepare()
 {
     download_gmp()
@@ -73,10 +93,7 @@ prepare()
         if [ ! -s ${CURRENT_DIR}/gmp-${GMP_VERSION}.tar.bz2 ]; then
             curl -L -o ${CURRENT_DIR}/gmp-${GMP_VERSION}.tar.bz2 https://gmplib.org/download/gmp/gmp-${GMP_VERSION}.tar.bz2
         fi
-        rm -rf gmp
         tar xfj "gmp-${GMP_VERSION}.tar.bz2"
-        mv gmp-${GMP_VERSION} gmp
-        cd gmp
     }
     download_ntl()
     {
@@ -92,16 +109,8 @@ prepare()
 
 build_gmp()
 {
-   
-    PLATFORM=$1
-    ARCH=$2
-    SDK=`xcrun --sdk $PLATFORM --show-sdk-path`
-    PLATFORM_PATH=`xcrun --sdk $PLATFORM --show-sdk-platform-path`
-    CLANG=`xcrun --sdk $PLATFORM --find clang`
-    CURRENT_DIR=`pwd`
-    DEVELOPER=`xcode-select --print-path`
-    export PATH="${PLATFORM_PATH}/Developer/usr/bin:${DEVELOPER}/usr/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    mkdir "${CURRENT_DIR}/../gmplib-so-${PLATFORM}-${ARCH}"
+    GMP_INSTALL_DIR="${THIS_PATH}/gmplib-${PLATFORM}-${ARCH}"
+    cd gmp-${GMP_VERSION} 
     CFLAGS="-arch ${ARCH} --sysroot=${SDK}"
     EXTRA_FLAGS="$(version_min_flag $PLATFORM)"
     CCARGS="${CLANG} ${CFLAGS}"
@@ -109,34 +118,28 @@ build_gmp()
     #CONFIGURESCRIPT="gmp_configure_script.sh"
     #cat >"$CONFIGURESCRIPT" << EOF
 
-    ./configure CC="$CCARGS" CPPFLAGS="$CPPFLAGSARGS" --host=${ARCH}-apple-darwin --disable-assembly --prefix="${CURRENT_DIR}/../gmplib-so-${PLATFORM}-${ARCH}"
+    ./configure CC="$CCARGS" CPPFLAGS="$CPPFLAGSARGS" --host=${ARCH}-apple-darwin --disable-shared --disable-assembly --prefix="${GMP_INSTALL_DIR}"
 
     make -j $LOGICALCPU_MAX &> "${CURRENT_DIR}/gmplib-so-${PLATFORM}-${ARCH}-build.log"
     make install &> "${CURRENT_DIR}/gmplib-so-${PLATFORM}-${ARCH}-install.log"
-    rm "${CURRENT_DIR}/../gmplib-so-${PLATFORM}-${ARCH}/lib/libgmp.10.dylib"
-    rm "${CURRENT_DIR}/../gmp-${GMP_VERSION}.tar.bz2"
-    cd ../
+    cd "${THIS_PATH}"
 }
 
 build_ntl()
 {
-    PLATFORM=$1
-    ARCH=$2
-    CURRENT_DIR=`pwd`
-    SDK=`xcrun --sdk $PLATFORM --show-sdk-path`
-    
-    mkdir ntl
-    mkdir ntl/libs
+    NTL_INSTALL_DIR="${THIS_PATH}/ntl-${PLATFORM}-${ARCH}"    
     cd ntl-${NTL_VERSION}
     cd src
 
-    ./configure CXX=clang++ CXXFLAGS="-stdlib=libc++  -arch ${ARCH} -isysroot ${SDK}"  NTL_THREADS=on NATIVE=on TUNE=x86 NTL_GMP_LIP=on PREFIX="${CURRENT_DIR}/ntl" GMP_PREFIX="${CURRENT_DIR}/gmplib-so-${PLATFORM}-${ARCH}"
+    ./configure CXX="$CLANG++" CXXFLAGS="-stdlib=libc++  -arch ${ARCH} -isysroot ${SDK}"  NTL_THREADS=on NATIVE=on TUNE=x86 NTL_GMP_LIP=on PREFIX="${NTL_INSTALL_DIR}" GMP_PREFIX="${CURRENT_DIR}/gmplib-${PLATFORM}-${ARCH}"
     make -j
+
+    make install
     
-    cp -R "${CURRENT_DIR}/ntl-${NTL_VERSION}/include" "${CURRENT_DIR}/ntl/include" 
-    cp "${CURRENT_DIR}/ntl-${NTL_VERSION}/src/ntl.a" "${CURRENT_DIR}/ntl/libs/ntl.a"
-    rm "${CURRENT_DIR}/ntl-${NTL_VERSION}.tar"
-    cd ../../
+    #cp -R "${CURRENT_DIR}/ntl-${NTL_VERSION}/include" "${CURRENT_DIR}/ntl/include" 
+    #cp "${CURRENT_DIR}/ntl-${NTL_VERSION}/src/ntl.a" "${CURRENT_DIR}/ntl/libs/ntl.a"
+    #rm "${CURRENT_DIR}/ntl-${NTL_VERSION}.tar"
+    cd "${THIS_PATH}"
 }
 
 build_helib() 
@@ -167,14 +170,14 @@ build_all()
     SUFFIX=$1
     BUILD_IN=$2
     
-    build_gmp "${MACOS}" "x86_64"
-    build_ntl "${MACOS}" "x86_64"
-    build_helib "${MACOS}" "x86_64"
+    build_gmp 
+    build_ntl 
+    #build_helib 
 }
 
 change_submodules
 check_cmake
 prepare
-build_all "ios" "${MACOS};|x86_64"
+build_all "${MACOS};|x86_64"
 echo " — — — — — — — — — — Building Dependencies Script Ended — — — — — — — — — — "
 
