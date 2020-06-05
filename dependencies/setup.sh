@@ -144,8 +144,8 @@ build_ntl()
 
 build_helib() 
 {
-    PLATFORM=$1
-    ARCH=$2
+    #PLATFORM=$1
+    #ARCH=$2
     CURRENT_DIR=`pwd`
     DEPEND_DIR="${CURRENT_DIR}"
     cp "${CURRENT_DIR}/Helib_install/CMakeLists.txt" "${CURRENT_DIR}/HElib"
@@ -157,14 +157,13 @@ build_helib()
     -DCMAKE_INSTALL_PREFIX=`pwd`/_install \
     -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO \
     -DCMAKE_IOS_INSTALL_COMBINED=YES \
-    -DGMP_DIR="${DEPEND_DIR}/gmplib-${PLATFORM}-${ARCH}" \
-    -DGMP_HEADERS="${GMP_DIR}/include" \
-    -DGMP_LIB="${GMP_DIR}/lib/libgmp.a" \
-    -DNTL_DIR="${DEPEND_DIR}/ntl-${PLATFORM}-${ARCH}" \
-    -DNTL_INCLUDE_PATHS="${NTL_DIR}/include" \
-    -DNTL_LIB="${NTL_DIR}/lib/ntl.a"
-#    -DNTL_LIB="${NTL_DIR}/lib/ntl.a" \
-#    -DNTL_DIR="${DEPEND_DIR}/ntl/include"
+    -DGMP_INSTALL_DIR="${DEPEND_DIR}/gmplib-${PLATFORM}-${ARCH}" \
+    -DGMP_HEADERS="${GMP_INSTALL_DIR}/include" \
+    -DGMP_LIB="${GMP_INSTALL_DIR}/lib/libgmp.a" \
+    -DNTL_INSTALL_DIR="${DEPEND_DIR}/ntl-${PLATFORM}-${ARCH}" \
+    -DNTL_INCLUDE_PATHS="${NTL_INSTALL_DIR}/include" \
+    -DNTL_LIB="${NTL_INSTALL_DIR}/lib/ntl.a" \
+    -DNTL_DIR="${NTL_INSTALL_DIR}/include"
 }
 
 build_all()
@@ -174,7 +173,7 @@ build_all()
     
     build_gmp 
     build_ntl 
-    #build_helib 
+    build_helib 
 }
 
 change_submodules
